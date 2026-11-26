@@ -7,8 +7,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract zip
-        run: unzip -q AI-PITO.zip -d proj
+
+      # Kalau yang diupload ke GitHub berupa .zip (GitHub tidak meng-unzip sendiri), zip-nya dibuka otomatis di sini.
+      - name: Cari proyek (unzip otomatis kalau perlu)
+        id: src
+        run: |
+          if [ ! -f settings.gradle.kts ]; then
+            ZIP=$(ls -t ./*.zip 2>/dev/null | head -1 || true)
+            if [ -n "$ZIP" ]; then
+              echo "Membuka $ZIP"
+              mkdir -p _src
+              unzip -oq "$ZIP" -d _src
+            fi
+          fi
+          S=$(find . -name settings.gradle.kts -not -path './.git/*' | awk '{print length, $0}' | sort -n | head -1 | cut -d' ' -f2-)
+          if [ -z "$S" ]; then
+            echo "::error::settings.gradle.kts tidak ketemu. Upload isi proyek (atau zip-nya) ke root repo."
+            exit 1
+          fi
+          echo "Proyek ada di: $(dirname "$S")"
+          echo "dir=$(dirname "$S")" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -17,8 +36,10 @@ jobs:
         with:
           gradle-version: 8.9
       - name: Build debug APK
-        run: gradle -p proj assembleDebug --no-daemon
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: AI-PITO-APK
-          path: proj/app/build/outputs/apk/debug/*.apk
+          name: AiAssist-APK
+          path: ${{ steps.src.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
