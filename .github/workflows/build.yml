@@ -37,7 +37,18 @@ jobs:
           gradle-version: 8.9
       - name: Build debug APK
         working-directory: ${{ steps.src.outputs.dir }}
-        run: gradle assembleDebug --no-daemon
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee build.log
+
+      # Kalau build gagal, baris error-nya dimunculkan di bagian "Annotations" halaman run (gampang di-screenshot).
+      - name: Tampilkan error
+        if: failure() && steps.src.outputs.dir != ''
+        working-directory: ${{ steps.src.outputs.dir }}
+        shell: bash
+        run: |
+          grep -E "^e: |error:|What went wrong|Execution failed|AAPT|Could not |not found|Unresolved" -A2 build.log 2>/dev/null | head -40 | while IFS= read -r l; do echo "::error::$l"; done || true
       - uses: actions/upload-artifact@v4
         with:
           name: AiAssist-APK
